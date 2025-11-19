@@ -98,4 +98,49 @@
         async function loadLicenses() {
             try {
                 const response = await fetch('/api/admin/licenses');
-                const licenses =
+                const licenses = await response.json();
+                
+                const container = document.getElementById('licensesList');
+                
+                if (licenses.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500">Лицензии не найдены</p>';
+                    return;
+                }
+                
+                let html = '';
+                licenses.forEach(license => {
+                    const status = license.is_active ? 
+                        (new Date(license.expires_at) > new Date() ? '🟢 Активна' : '🔴 Истекла') : 
+                        '⚫ Неактивна';
+                    
+                    html += `
+                        <div class="border rounded-lg p-4 ${!license.is_active ? 'bg-gray-100' : ''}">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-semibold">${license.owner_name}</h3>
+                                    <p class="text-sm text-gray-600">${license.email}</p>
+                                    <p class="text-xs font-mono mt-1">${license.key}</p>
+                                </div>
+                                <span class="text-sm">${status}</span>
+                            </div>
+                            <div class="mt-2 text-sm">
+                                <p>Запросов сегодня: ${license.today_requests}/${license.requests_per_day}</p>
+                                <p>Всего запросов: ${license.total_requests}</p>
+                                <p>Действует до: ${new Date(license.expires_at).toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                alert('Ошибка загрузки лицензий: ' + error.message);
+            }
+        }
+        
+        // Загружаем лицензии при загрузке страницы
+        loadLicenses();
+    </script>
+</body>
+</html>
