@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Парсер Яндекс Карт</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8">Парсер Яндекс Карт</h1>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <form id="searchForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Лицензионный ключ:</label>
+                    <input type="text" id="licenseKey" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Поисковый запрос:</label>
+                    <input type="text" id="query" placeholder="кафе, рестораны, магазины..." required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Город:</label>
+                    <input type="text" id="city" placeholder="Москва"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Лимит результатов:</label>
+                    <input type="number" id="limit" value="50" min="1" max="100"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                
+                <button type="submit" 
+                        class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    Начать поиск
+                </button>
+            </form>
+        </div>
+        
+        <div id="results" class="hidden bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Результаты</h2>
+            <div id="resultsTable" class="overflow-x-auto"></div>
+            <div id="exportButtons" class="mt-4 space-x-2 hidden">
+                <button onclick="exportResults('json')" class="bg-green-600 text-white px-4 py-2 rounded">JSON</button>
+                <button onclick="exportResults('csv')" class="bg-blue-600 text-white px-4 py-2 rounded">CSV</button>
+                <button onclick="exportResults('excel')" class="bg-green-700 text-white px-4 py-2 rounded">Excel</button>
+            </div>
+        </div>
+        
+        <div id="loading" class="hidden text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p class="mt-2">Идет поиск организаций...</p>
+        </div>
+    </div>
+
+    <script>
+        let currentRequestId = null;
+        
+        document.getElementById('searchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const licenseKey = document.getElementById('licenseKey').value;
+            const query = document.getElementById('query').value;
+            const city = document.getElementById('city').value;
+            const limit = document.getElementById('limit').value;
+            
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('results').classList.add('hidden');
+            
+            try {
+                const formData = new FormData();
+                formData.append('query', query);
+                formData.append('city', city);
+                formData.append('limit', limit);
+                
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: {
+                        'X-License-Key': licenseKey
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResults(data.data);
+                    currentRequestId = data.request_id;
+                    document.getElementById('exportButtons').classList.remove('hidden');
+                } else {
+                    alert('Ошибка: ' + data.detail);
+                }
+                
+            } catch (error) {
+                alert('Ошибка сети: ' + error.message);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('results').classList.remove('hidden');
+            }
+        });
+        
+        function displayResults(organizations) {
+            const table = document.getElementById('resultsTable');
+            
+            if (organizations.length === 0) {
+                table.innerHTML = '<p class="text-gray-500">Организации не найдены</p>';
+                return;
+            }
+            
+            let html = `
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Название</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Категории</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Адрес</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Рейтинг</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Телефоны</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+            `;
+            
+            organizations.forEach(org => {
+                html += `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${org.name || '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${org.categories || '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${org.address || '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${org.rating || '-'} (${org.reviews_count || 0})</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${org.phones || '-'}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            table.innerHTML = html;
+        }
+        
+        function exportResults(format) {
+            if (!currentRequestId) return;
+            
+            const licenseKey = document.getElementById('licenseKey').value;
+            window.open(`/api/export/${currentRequestId}?format=${format}`, '_blank');
+        }
+    </script>
+</body>
+</html>
